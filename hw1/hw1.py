@@ -420,7 +420,7 @@ best_w_vector = w_vector
 # save model
 param = np.append(param_Take, [best_b])
 param = np.append(param, best_w_vector)
-np.save('model.npy', param)
+np.save('model', param)
 """
 
 # load model
