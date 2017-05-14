@@ -1,0 +1,6 @@
+numpy
+sklearn
+Pillow
+matplotlib
+word2vec
+adjustText
