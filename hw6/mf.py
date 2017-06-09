@@ -145,79 +145,160 @@ patience = 10
 epochs = 1000
 batch_size = 512
 
-earlystopping = EarlyStopping(monitor='val_rmse_score', patience = patience, verbose=1, mode='auto')
-checkpoint = ModelCheckpoint('mf_model.h5',
-                             verbose=1,
-                             save_best_only=True,
-                             save_weights_only=True,
-                             monitor='val_rmse_score',
-                             mode='min')
-
-history = model.fit([userid_train, movieid_train], y_train, 
-                         epochs=epochs, 
-                         batch_size = batch_size,
-                         validation_data=([userid_valid, movieid_valid], y_valid),
-                 		 callbacks=[earlystopping,checkpoint])
-
-
-del model
-
-model = create_model(n_users, n_items)
-model.load_weights('mf_model.h5')
-
-model.save('mf_complete_model.h5')
-del model
+#earlystopping = EarlyStopping(monitor='val_rmse_score', patience = patience, verbose=1, mode='auto')
+#checkpoint = ModelCheckpoint('mf_model.h5',
+#                             verbose=1,
+#                             save_best_only=True,
+#                             save_weights_only=True,
+#                             monitor='val_rmse_score',
+#                             mode='min')
+#
+#history = model.fit([userid_train, movieid_train], y_train, 
+#                         epochs=epochs, 
+#                         batch_size = batch_size,
+#                         validation_data=([userid_valid, movieid_valid], y_valid),
+#                 		 callbacks=[earlystopping,checkpoint])
+#
+#
+#del model
+#
+#model = create_model(n_users, n_items)
+#model.load_weights('mf_model.h5')
+#
+#model.save('mf_complete_model.h5')
+#del model
 
 
 model = load_model('mf_complete_model.h5')
 
 
+#
+#train_res = model.predict([userid_train, movieid_train])
+#
+#train_pred = train_res.flatten()
+#train_true = y_train
+#
+#
+### normalization
+##train_pred = train_pred * std + mean
+##train_true = train_true * std + mean
+#
+#train_error = np.mean((train_true - train_pred) ** 2) ** 0.5
+#print('train error: ', train_error)
+#
+#
+#valid_res = model.predict([userid_valid, movieid_valid])
+#
+#
+#valid_pred = valid_res.flatten()
+#valid_true = y_valid
+#
+#
+### normalization
+##valid_pred = valid_pred * std + mean
+##valid_true = valid_true * std + mean
+#
+#valid_error = np.mean((valid_true - valid_pred) ** 2) ** 0.5
+#print('valid error: ', valid_error)
+#
+#res = model.predict([tests_userid,tests_movieid])
+#
+#
+#pred = res.flatten()
+#
+### normalization
+##pred = pred * std + mean
+#
+#
+#result = [['TestDataID','Rating']]
+#for i, j in zip(test_id, pred):
+#    line = []
+#    line.append(int(i))
+#    line.append(float(j))
+#    result.append(line)
+#
+#f = open('mf_prediction.csv', 'w', encoding = 'big5', newline='')
+#w = csv.writer(f)
+#w.writerows(result)
+#f.close()
 
-train_res = model.predict([userid_train, movieid_train])
-
-train_pred = train_res.flatten()
-train_true = y_train
 
 
-## normalization
-#train_pred = train_pred * std + mean
-#train_true = train_true * std + mean
-
-train_error = np.mean((train_true - train_pred) ** 2) ** 0.5
-print('train error: ', train_error)
 
 
-valid_res = model.predict([userid_valid, movieid_valid])
 
 
-valid_pred = valid_res.flatten()
-valid_true = y_valid
+user_emb = np.array(model.layers[2].get_weights()).squeeze()
+print('user embedding shape:', user_emb.shape)
+movie_emb = np.array(model.layers[3].get_weights()).squeeze()
+print('movie embedding shape:', movie_emb.shape)
+
+np.save('user_emb.npy', user_emb)
+np.save('movie_emb.npy', movie_emb)
 
 
-## normalization
-#valid_pred = valid_pred * std + mean
-#valid_true = valid_true * std + mean
 
-valid_error = np.mean((valid_true - valid_pred) ** 2) ** 0.5
-print('valid error: ', valid_error)
-
-res = model.predict([tests_userid,tests_movieid])
+movies = pandas.read_csv('data/movies.csv', sep='::', engine='python', header = 0,
+                         names=['movieid', 'title', 'genre']).set_index('movieid')                        
+                        
 
 
-pred = res.flatten()
 
-## normalization
-#pred = pred * std + mean
+movies['genre'] = movies.genre.str.split('|')
+
+movies_genres_names = ['Action', 'Adventure', 'Animation', "Children's",
+'Comedy', 'Crime', 'Documentary', 'Drama', 'Fantasy', 'Film-Noir', 'Horror', 
+'Musical', 'Mystery', 'Romance', 'Sci-Fi', 'Thriller', 'War', 'Western']
 
 
-result = [['TestDataID','Rating']]
-for i, j in zip(test_id, pred):
-    line = []
-    line.append(int(i))
-    line.append(float(j))
-    result.append(line)
 
-f = open('mf_prediction.csv', 'w', encoding = 'big5', newline='')
-w = csv.writer(f)
-w.writerows(result)
-f.close()
+movie_x = movie_emb
+movie_y = np.zeros(movie_emb.shape[0])
+movie_y = list(movie_y)
+
+for i in range(movie_emb.shape[0]):
+    try:
+        movie_y[i+1] = movies.genre[i+1]
+    except:
+        continue
+    
+
+
+x = []
+y = []
+for i in range(len(movie_y)):
+    if movie_y[i] == 0:
+        movie_y[i] = 'None'
+        
+        
+    if any(xs in movie_y[i] for xs in ['Action','War']):
+        x.append(movie_x[i])
+        y.append(-1)
+    elif any(xs in movie_y[i] for xs in ['Romance','Drama','Children\'s']):
+        x.append(movie_x[i])
+        y.append(1)
+    else:
+        continue
+    
+    
+
+
+from matplotlib import pyplot as plt
+from sklearn.manifold import TSNE
+x = np.array(x, dtype = np.float64)
+y = np.array(y)
+
+
+tsne_model = TSNE(n_components=2, random_state=0)
+np.set_printoptions(suppress=True)
+vis_data = tsne_model.fit_transform(x) 
+
+vis_x = vis_data[:,0]
+vis_y = vis_data[:,1]
+
+
+cm = plt.cm.get_cmap('RdYlBu')
+sc = plt.scatter(vis_x, vis_y, c = y, cmap = cm, edgecolors = None)    
+plt.colorbar(sc)
+plt.savefig('draw.png', dpi=800)
+plt.show()
